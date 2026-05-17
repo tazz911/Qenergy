@@ -5,16 +5,15 @@ const axios = require('axios');
 admin.initializeApp();
 
 // ── Send OTP to email for password reset ──────────────────────────────────────
-exports.sendResetOtp = onCall(async (request) => {
+exports.sendResetOtp = onCall({ cors: true }, async (request) => {
   const { email } = request.data;
   if (!email) throw new HttpsError('invalid-argument', 'Email is required');
 
-  // Check user exists in Firebase
+  // Check user exists in Firebase — throw error if not found
   try {
     await admin.auth().getUserByEmail(email);
   } catch (_) {
-    // Return success even if email not found (security best practice)
-    return { success: true };
+    throw new HttpsError('not-found', 'This email is not registered. Please check and try again.');
   }
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -41,7 +40,7 @@ exports.sendResetOtp = onCall(async (request) => {
 });
 
 // ── Verify OTP and update password directly ───────────────────────────────────
-exports.resetPasswordWithOtp = onCall(async (request) => {
+exports.resetPasswordWithOtp = onCall({ cors: true }, async (request) => {
   const { email, otp, newPassword } = request.data;
 
   if (!email || !otp || !newPassword) {

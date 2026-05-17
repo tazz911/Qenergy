@@ -32,6 +32,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   bool _hasUppercase(String p) => p.contains(RegExp(r'[A-Z]'));
   bool _hasDigit(String p)     => p.contains(RegExp(r'[0-9]'));
+  bool _hasSpecial(String p)   => p.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]]'));
 
   bool _validate() {
     String? ce, ne, conf;
@@ -45,8 +46,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     if (pass.isNotEmpty && pass.length < 8)
       ne = 'Password must be at least 8 characters';
-    if (pass.isNotEmpty && (!_hasUppercase(pass) || !_hasDigit(pass)))
-      ne = 'Must contain uppercase letters and numbers';
+    else if (pass.isNotEmpty &&
+        (!_hasUppercase(pass) || !_hasDigit(pass) || !_hasSpecial(pass)))
+      ne = 'Must contain uppercase, number, and special character (!@#\$...)';
     if (pass.isNotEmpty && confirm.isNotEmpty && pass != confirm)
       conf = 'Passwords do not match';
     if (pass.isNotEmpty && current.isNotEmpty && pass == current)
@@ -236,14 +238,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   Widget _StrengthRow(String pass) {
-    final long  = pass.length >= 8;
-    final upper = _hasUppercase(pass);
-    final digit = _hasDigit(pass);
+    final long    = pass.length >= 8;
+    final upper   = _hasUppercase(pass);
+    final digit   = _hasDigit(pass);
+    final special = _hasSpecial(pass);
+
     Color barColor;
     String label;
-    if (long && upper && digit) { barColor = AppColors.green;  label = 'Strong'; }
-    else if (long)               { barColor = AppColors.orange; label = 'Medium'; }
-    else                         { barColor = AppColors.red;    label = 'Weak'; }
+    if (long && upper && digit && special) { barColor = AppColors.green;  label = 'Strong'; }
+    else if (long)                          { barColor = AppColors.orange; label = 'Medium'; }
+    else                                    { barColor = AppColors.red;    label = 'Weak'; }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,7 +256,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           Expanded(child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: long && upper && digit ? 1.0 : long ? 0.6 : 0.3,
+              value: long && upper && digit && special ? 1.0 : long ? 0.55 : 0.25,
               minHeight: 4, backgroundColor: AppColors.bg3, color: barColor,
             ),
           )),
@@ -265,6 +269,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           _Criterion('8+ chars', long),
           _Criterion('Uppercase', upper),
           _Criterion('Number', digit),
+          _Criterion('Special (!@#)', special),
         ]),
       ],
     );
