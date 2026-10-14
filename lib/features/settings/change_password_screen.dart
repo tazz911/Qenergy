@@ -1,6 +1,7 @@
 // lib/features/settings/change_password_screen.dart
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/auth_provider.dart';
 import '../../core/theme/app_theme.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -66,46 +67,26 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (!_validate()) return;
     setState(() { _loading = true; _currentPassError = null; _newPassError = null; _confirmError = null; });
 
-    try {
-      final user  = FirebaseAuth.instance.currentUser!;
-      final email = user.email!;
+    final err = await context.read<AuthProvider>()
+        .changePassword(_currentPassCtrl.text, _newPassCtrl.text);
+    if (!mounted) return;
 
-      // Step 1 — Re-authenticate with current password
-      final credential = EmailAuthProvider.credential(
-        email: email,
-        password: _currentPassCtrl.text,
-      );
-      await user.reauthenticateWithCredential(credential);
-
-      // Step 2 — Update to new password
-      await user.updatePassword(_newPassCtrl.text);
-
-      if (!mounted) return;
+    if (err == null) {
       setState(() => _loading = false);
-
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Password changed successfully!'),
         backgroundColor: AppColors.green,
       ));
       Navigator.pop(context);
-
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
+    } else {
       setState(() {
         _loading = false;
-        if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-          _currentPassError = 'Current password is incorrect.';
-        } else if (e.code == 'weak-password') {
-          _newPassError = 'Password is too weak.';
-        } else if (e.code == 'requires-recent-login') {
-          _currentPassError = 'Session expired. Please sign out and sign in again.';
+        if (err.startsWith('Current password')) {
+          _currentPassError = err;
         } else {
-          _newPassError = e.message ?? 'Failed to update password.';
+          _newPassError = err;
         }
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() { _loading = false; _newPassError = 'Network error. Try again.'; });
     }
   }
 

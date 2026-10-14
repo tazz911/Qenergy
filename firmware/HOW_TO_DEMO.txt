@@ -1,0 +1,144 @@
+==========================================================
+  EnergyIQ - ESP32 METER IN THE WOKWI SIMULATOR
+  (CAT B Module 1 + Module 2, no real sensors needed)
+==========================================================
+
+WHAT IS THIS?
+  The real ESP32 code (energyiq_esp32\energyiq_esp32.ino) runs on a
+  pretend ESP32 in your web browser (wokwi.com, free).
+  The 4 sliders take the place of the sensors:
+     Slider 1 (top)  = voltage sensor  (GPIO 34)  middle = 230 V
+     Slider 2        = CT clamp zone 1 (GPIO 35)  0 - 30 A
+     Slider 3        = CT clamp zone 2 (GPIO 32)  0 - 30 A
+     Slider 4        = CT clamp zone 3 (GPIO 33)  0 - 30 A
+     Red button      = BOOT button (GPIO 0)   hold 5 s = factory reset
+     Blue LED        = WiFi status (GPIO 2)
+                       fast blink = setup mode
+                       slow blink = connecting
+                       on         = online
+  The simulated ESP32 really goes on the internet and sends readings
+  to our Supabase database, so the EnergyIQ app shows them live.
+
+
+----------------------------------------------------------
+PART A - PREPARE (once)
+----------------------------------------------------------
+ 1. Start the EnergyIQ app and log in.
+ 2. Make sure you have devices for the zones, for example:
+      Kitchen zone -> device  ESP32-001   (already exists)
+      Office  zone -> device  ESP32-002   (add it: tap the zone ->
+                                           "+ Add device")
+ 3. Tap each device and copy its API key (copy icon).
+    Keep them in Notepad - you paste them in Part C.
+
+
+----------------------------------------------------------
+PART B - OPEN THE SIMULATOR
+----------------------------------------------------------
+ 1. Go to  https://wokwi.com  -> sign in (free, Google login is fine).
+ 2. Click "+ New Project" -> choose "ESP32".
+ 3. On the left you see the tab "sketch.ino":
+      - delete everything in it
+      - open  energyiq_esp32\energyiq_esp32.ino  in Notepad,
+        copy ALL of it, paste it into sketch.ino
+ 4. Click the tab "diagram.json":
+      - delete everything in it
+      - copy ALL of  energyiq_esp32\diagram.json  and paste it
+    The picture on the right now shows the ESP32, 4 sliders,
+    a red button and a blue LED.
+ 5. Click "Save" (top). Now you have a link you can open any time
+    (good for showing your advisor).
+
+
+----------------------------------------------------------
+PART C - FIRST START = WIFI SETUP              (M1F1 + M1F2)
+----------------------------------------------------------
+ 1. Press the green PLAY button.
+ 2. The Serial Monitor (under the picture) says
+      "SETUP MODE - no WiFi saved yet."   and the LED blinks fast.
+ 3. Click in the Serial Monitor box and type these lines,
+    pressing Enter after each one:
+
+      ssid Wokwi-GUEST
+      pass
+      zone 1 ESP32-001 PASTE-KITCHEN-API-KEY-HERE
+      zone 2 ESP32-002 PASTE-OFFICE-API-KEY-HERE
+      show
+      restart
+
+    ("pass" alone = no password. Wokwi-GUEST is the simulator's WiFi.)
+    "show" lists what is saved in flash.
+ 4. After "restart" it says  "Settings loaded from flash."
+    -> it remembered everything after the restart        (M1F2)
+    Then "WiFi connected" and a line every 5 seconds:
+      Zone 1 ESP32-001   230.4 V   8.79 A   1.86 kW  -> sent
+
+ NOTE: Wokwi forgets the flash when you press STOP. Pressing Play
+ again = a brand new ESP32, so you do step 3 again. To show that
+ the settings survive a restart, type "restart" (do NOT press Stop).
+
+
+----------------------------------------------------------
+PART D - DEMO FOR THE ADVISOR (with the app open next to it)
+----------------------------------------------------------
+ M2F2  Multi-zone current (CT clamps)
+       Move slider 2 (zone 1) -> Kitchen current changes in the app.
+       Move slider 3 (zone 2) -> Office changes, Kitchen does not.
+       Push a current slider near the end (> 20 A)
+         -> "Overload" alert appears in the app.
+
+ M2F1  Voltage measurement
+       Move slider 1 to the right (> 250 V) -> "Voltage high" alert.
+       Move it to the left  (< 210 V)       -> "Voltage low" alert.
+       Middle = normal 230 V.
+
+ M1F3  Auto reconnect
+       Type  restart  -> it powers up again, loads the settings
+       and reconnects to WiFi by itself (no typing needed).
+       If WiFi drops it says "WiFi lost - reconnecting by itself..."
+       and keeps the energy until it can send it.
+
+ M1F4  Factory reset
+       Hold the red button for 5 seconds (click and keep the mouse
+       pressed). After 5 s: "FACTORY RESET: all settings erased".
+       It restarts in SETUP MODE (LED blinks fast) - everything is gone.
+       Letting go before 5 s = "reset cancelled".
+       (Typing  reset  does the same.)
+
+ M1F1  WiFi setup is Part C. On the REAL ESP32 there is also a phone
+       page: the meter makes a WiFi called "EnergyIQ-Setup", you
+       connect your phone, and a form opens to type the WiFi name,
+       password and the API keys. (Wokwi cannot do this part,
+       because a phone cannot join a simulated WiFi.)
+
+
+----------------------------------------------------------
+PART E - LATER, WITH THE REAL ESP32 + SENSORS
+----------------------------------------------------------
+ Parts: ESP32 DevKit, ZMPT101B voltage sensor, SCT-013-030 CT clamps
+        (one per zone, each with a small bias circuit to 1.65 V).
+ Wiring: ZMPT101B OUT -> GPIO 34, clamp 1 -> GPIO 35,
+         clamp 2 -> GPIO 32, clamp 3 -> GPIO 33. Sensors on 3.3 V.
+ !! Mains voltage is dangerous. The voltage sensor and the clamps
+    must be installed by someone qualified. The clamps go around one
+    wire only and never touch bare metal.
+ 1. Install Arduino IDE (arduino.cc) -> Boards Manager -> "esp32".
+ 2. Open energyiq_esp32.ino and change line
+        #define WOKWI 1    to    #define WOKWI 0
+ 3. Tools -> Board -> "ESP32 Dev Module", choose the COM port, Upload.
+ 4. First start: phone -> WiFi "EnergyIQ-Setup" -> fill the form.
+ 5. Calibrate: compare with a multimeter / clamp meter and change
+    V_CAL and I_CAL at the top of the file.
+
+
+----------------------------------------------------------
+PROBLEMS
+----------------------------------------------------------
+ "rejected (403) unknown device or wrong api key"
+    -> serial or key is wrong, or the device is Inactive in the app.
+ "Bad API key"  -> paste it again; it must be 36 characters.
+ Nothing in the app -> app logged in with a different account than
+    the one that owns the devices, or Supabase is paused
+    (supabase.com -> your OTHER account -> Restore project).
+ Wokwi is slow -> normal; the free simulator sometimes runs slower
+    than real time.

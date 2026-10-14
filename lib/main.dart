@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/config/supabase_config.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/auth_provider.dart' as app;
@@ -8,16 +9,9 @@ import 'features/home/main_shell.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyCt1p4mXxx6k7ZS8yAOkKkKALqpIxjm7sI",
-      authDomain: "btech-91fce.firebaseapp.com",
-      projectId: "btech-91fce",
-      storageBucket: "btech-91fce.firebasestorage.app",
-      messagingSenderId: "679005043282",
-      appId: "1:679005043282:web:5819b9a286d154bc387d8b",
-      measurementId: "G-D1J30MRMMW",
-    ),
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.publishableKey,
   );
   runApp(const EnergyIQApp());
 }

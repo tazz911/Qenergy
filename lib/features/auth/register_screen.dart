@@ -1,18 +1,11 @@
 // lib/features/auth/register_screen.dart
 import 'dart:async';
-import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
 import '../../core/providers/auth_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../home/main_shell.dart';
-
-const _serviceId  = 'service_s07dvkk';
-const _templateId = 'template_05thw2k';
-const _publicKey  = '2TbvVci0KOW9ZaPd7';
 
 enum _RegisterStep { form, otp }
 
@@ -40,7 +33,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // ── OTP fields ────────────────────────────────────────
   final List<TextEditingController> _otpCtrls = List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _otpNodes = List.generate(6, (_) => FocusNode());
-  String _generatedOtp = '';
   bool _otpLoading  = false;
   bool _otpSending  = false;
   String? _otpError;
@@ -103,60 +95,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_validate()) return;
-    final auth   = context.read<AuthProvider>();
-    final result = await auth.register(
+    final auth = context.read<AuthProvider>();
+    final ok   = await auth.register(
       _nameCtrl.text.trim(), _emailCtrl.text.trim(), _passCtrl.text,
     );
-    if (!mounted) return;
-    if (result.success) {
-      await _sendOtp();
-      setState(() => _step = _RegisterStep.otp);
-    }
+    if (!mounted || !ok) return;
+    setState(() => _step = _RegisterStep.otp);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Verification code sent to your email!'),
+      backgroundColor: AppColors.green,
+    ));
+    _startTimer();
   }
 
-  // ── OTP logic ─────────────────────────────────────────
+  // ── OTP logic (Supabase emails the code and checks it) ─
 
   Future<void> _sendOtp() async {
     setState(() { _otpSending = true; _otpError = null; });
-    _generatedOtp = List.generate(6, (_) => Random().nextInt(10)).join();
-
-    try {
-      final response = await http.post(
-        Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'origin': 'https://localhost',
-        },
-        body: jsonEncode({
-          'service_id':  _serviceId,
-          'template_id': _templateId,
-          'user_id':     _publicKey,
-          'template_params': {
-            'otp_code': _generatedOtp,
-            'to_email': _emailCtrl.text.trim(),
-            'time':     '10 minutes',
-          },
-        }),
-      );
-
-      if (mounted) {
-        if (response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Verification code sent to your email!'),
-            backgroundColor: AppColors.green,
-          ));
-        } else {
-          setState(() => _otpError = 'Failed to send code. Tap Resend.');
-        }
-      }
-    } catch (e) {
-      if (mounted) setState(() => _otpError = 'Network error. Tap Resend.');
+    final err = await context.read<AuthProvider>().resendSignupCode(_emailCtrl.text.trim());
+    if (!mounted) return;
+    setState(() { _otpSending = false; _otpError = err; });
+    if (err == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('A new code was sent to your email!'),
+        backgroundColor: AppColors.green,
+      ));
     }
-
-    if (mounted) {
-      setState(() => _otpSending = false);
-      _startTimer();
-    }
+    _startTimer();
   }
 
   void _startTimer() {
@@ -183,22 +148,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _verifyOtp() async {
     if (_otp.length < 6) return;
     setState(() { _otpLoading = true; _otpError = null; });
-    await Future.delayed(const Duration(milliseconds: 500));
 
-    if (_otp == _generatedOtp) {
-      final auth = context.read<AuthProvider>();
-      await auth.login(_emailCtrl.text.trim(), _passCtrl.text);
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const MainShell()),
-          (_) => false,
-        );
-      }
+    final err = await context.read<AuthProvider>()
+        .verifySignupCode(_emailCtrl.text.trim(), _otp);
+    if (!mounted) return;
+
+    if (err == null) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainShell()),
+        (_) => false,
+      );
     } else {
       setState(() {
         _otpLoading = false;
-        _otpError = 'Incorrect code. Please try again.';
+        _otpError = err.contains('expired') || err.contains('invalid')
+            ? 'Incorrect or expired code. Please try again.'
+            : err;
         for (final c in _otpCtrls) c.clear();
       });
       _otpNodes[0].requestFocus();
@@ -265,9 +231,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 border: Border.all(color: AppColors.red.withOpacity(0.3)),
               ),
               child: Text(
-                auth.error!.contains('already-in-use')
-                    ? 'Email already exists. Please use a different email.'
-                    : auth.error!,
+                auth.error!,
                 style: const TextStyle(color: AppColors.red, fontSize: 13),
               ),
             ),

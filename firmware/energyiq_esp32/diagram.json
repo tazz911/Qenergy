@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "author": "EnergyIQ team",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-slide-potentiometer", "id": "volt", "top": -200, "left": -380, "rotate": 0, "attrs": { "travelLength": "30", "value": "512" } },
+    { "type": "wokwi-slide-potentiometer", "id": "zone1", "top": -120, "left": -380, "rotate": 0, "attrs": { "travelLength": "30", "value": "300" } },
+    { "type": "wokwi-slide-potentiometer", "id": "zone2", "top": -40, "left": -380, "rotate": 0, "attrs": { "travelLength": "30", "value": "150" } },
+    { "type": "wokwi-slide-potentiometer", "id": "zone3", "top": 40, "left": -380, "rotate": 0, "attrs": { "travelLength": "30", "value": "0" } },
+    { "type": "wokwi-pushbutton", "id": "btn", "top": 150, "left": 200, "attrs": { "color": "red", "label": "RESET (hold 5 s)" } },
+    { "type": "wokwi-led", "id": "led", "top": -60, "left": 200, "attrs": { "color": "blue", "label": "WiFi" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 10, "left": 220, "rotate": 90, "attrs": { "value": "220" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+
+    [ "volt:SIG", "esp:34", "orange", [] ],
+    [ "volt:VCC", "esp:3V3", "red", [] ],
+    [ "volt:GND", "esp:GND.1", "black", [] ],
+
+    [ "zone1:SIG", "esp:35", "green", [] ],
+    [ "zone1:VCC", "esp:3V3", "red", [] ],
+    [ "zone1:GND", "esp:GND.1", "black", [] ],
+
+    [ "zone2:SIG", "esp:32", "green", [] ],
+    [ "zone2:VCC", "esp:3V3", "red", [] ],
+    [ "zone2:GND", "esp:GND.1", "black", [] ],
+
+    [ "zone3:SIG", "esp:33", "green", [] ],
+    [ "zone3:VCC", "esp:3V3", "red", [] ],
+    [ "zone3:GND", "esp:GND.1", "black", [] ],
+
+    [ "btn:1.l", "esp:0", "blue", [] ],
+    [ "btn:2.l", "esp:GND.2", "black", [] ],
+
+    [ "esp:2", "led:A", "blue", [] ],
+    [ "led:C", "r1:1", "black", [] ],
+    [ "r1:2", "esp:GND.3", "black", [] ]
+  ],
+  "dependencies": {}
+}
