@@ -59,7 +59,7 @@ struct Reading { float voltage, current, power, pf; };
 
 bool setupMode = false;          // no WiFi saved yet
 bool wasConnected = false;
-unsigned long lastWifiTry = 0, lastSend = 0, buttonDown = 0;
+unsigned long lastWifiTry = 0, lastSend = 0;
 int wifiTries = 0;
 bool buttonWarned = false;
 unsigned long lastSentAt[MAX_ZONES] = {0};
@@ -389,15 +389,30 @@ void measureAndSend() {
 }
 
 // ───────────────────────────── Button + LED ─────────────────────────────
-void checkButton() {
+// The button is watched by an interrupt, so a 5 s hold is never missed even while
+// the ESP32 is busy waiting for the cloud (an HTTPS send can take several seconds).
+volatile unsigned long pressStart = 0;   // millis() when the button went down, 0 = up
+volatile bool resetRequested = false;    // set when a hold of 5 s+ was released
+
+void IRAM_ATTR onButtonChange() {
   if (digitalRead(BUTTON_PIN) == LOW) {
-    if (!buttonDown) buttonDown = millis();
-    unsigned long held = millis() - buttonDown;
+    if (!pressStart) pressStart = millis();
+  } else {
+    if (pressStart && millis() - pressStart >= RESET_HOLD_MS) resetRequested = true;
+    pressStart = 0;
+  }
+}
+
+void checkButton() {
+  if (resetRequested) factoryReset();
+  unsigned long start = pressStart;
+  if (start) {
+    unsigned long held = millis() - start;
     if (held > 300 && !buttonWarned) { Serial.println("Button held - keep holding 5 s for FACTORY RESET..."); buttonWarned = true; }
     if (held >= RESET_HOLD_MS) factoryReset();
-  } else {
-    if (buttonWarned) Serial.println("Button released - reset cancelled.");
-    buttonDown = 0; buttonWarned = false;
+  } else if (buttonWarned) {
+    Serial.println("Button released - reset cancelled.");
+    buttonWarned = false;
   }
 }
 
@@ -412,6 +427,7 @@ void updateLed() {
 void setup() {
   Serial.begin(115200);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), onButtonChange, CHANGE);
   pinMode(LED_PIN, OUTPUT);
   analogReadResolution(12);
   delay(300);
