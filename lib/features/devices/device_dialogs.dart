@@ -161,6 +161,13 @@ Future<void> showDeviceDetailsDialog(BuildContext context, DeviceModel device, {
         ),
         TextButton(
           onPressed: () async {
+            final saved = await showEditDeviceDialog(ctx, device);
+            if (saved == true && ctx.mounted) Navigator.pop(ctx);
+          },
+          child: const Text('Edit'),
+        ),
+        TextButton(
+          onPressed: () async {
             await svc.updateDevice(device.deviceId, status: device.isActive ? 'inactive' : 'active');
             if (ctx.mounted) Navigator.pop(ctx);
           },
@@ -170,5 +177,68 @@ Future<void> showDeviceDetailsDialog(BuildContext context, DeviceModel device, {
             child: const Text('Close', style: TextStyle(color: AppColors.accent))),
       ],
     ),
+  );
+}
+
+/// Edit a device's name and type (M3F2). Returns true when saved.
+Future<bool?> showEditDeviceDialog(BuildContext context, DeviceModel device) {
+  final nameCtrl = TextEditingController(text: device.deviceName);
+  const types = ['meter', 'ESP32', 'sensor'];
+  String type = types.contains(device.deviceType) ? device.deviceType : 'meter';
+  String? error;
+  bool saving = false;
+
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setD) {
+      Future<void> save() async {
+        final name = nameCtrl.text.trim();
+        if (name.isEmpty) { setD(() => error = 'Please enter a device name.'); return; }
+        if (name.length > 50) { setD(() => error = 'Name is too long (max 50 letters).'); return; }
+        setD(() { saving = true; error = null; });
+        try {
+          await SupabaseService().updateDevice(device.deviceId, deviceName: name, deviceType: type);
+          if (ctx.mounted) Navigator.pop(ctx, true);
+          if (context.mounted) _snack(context, 'Device updated');
+        } catch (_) {
+          setD(() { saving = false; error = 'Could not save. Try again.'; });
+        }
+      }
+
+      return AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Edit device', style: TextStyle(color: AppColors.textPrimary, fontSize: 17)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: nameCtrl, autofocus: true, style: const TextStyle(color: AppColors.textPrimary),
+              decoration: const InputDecoration(hintText: 'Device name')),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: type,
+            dropdownColor: AppColors.bg3,
+            style: const TextStyle(color: AppColors.textPrimary),
+            items: const [
+              DropdownMenuItem(value: 'meter', child: Text('Smart meter')),
+              DropdownMenuItem(value: 'ESP32', child: Text('ESP32')),
+              DropdownMenuItem(value: 'sensor', child: Text('Sensor')),
+            ],
+            onChanged: (v) => setD(() => type = v ?? 'meter'),
+          ),
+          const SizedBox(height: 8),
+          Text('Serial: ${device.serialNumber} (cannot be changed - the meter uses it)',
+              style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+          if (error != null) ...[
+            const SizedBox(height: 10),
+            Text(error!, style: const TextStyle(color: AppColors.red, fontSize: 12)),
+          ],
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: saving ? null : save,
+            child: Text(saving ? 'Saving...' : 'Save', style: const TextStyle(color: AppColors.accent)),
+          ),
+        ],
+      );
+    }),
   );
 }

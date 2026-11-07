@@ -29,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<UsageBucket> _hourly = [];
   List<EnergyReading> _latest = [];
   List<DeviceModel> _devices = [];
+  List<EnergyReading> _recent = [];
 
   @override
   void initState() {
@@ -49,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _svc.usageBuckets(now.subtract(const Duration(hours: 23)).copyWith(minute: 0, second: 0), now.add(const Duration(minutes: 1))),
         _svc.latestReadings(),
         _svc.getAllDevices(),
+        _svc.getRecentReadings(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -56,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _hourly = results[1] as List<UsageBucket>;
         _latest = results[2] as List<EnergyReading>;
         _devices = results[3] as List<DeviceModel>;
+        _recent = results[4] as List<EnergyReading>;
       });
     } catch (_) {
       // keep showing the last values; next refresh will try again
@@ -85,6 +88,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     SliverToBoxAdapter(child: _ChartCard()),
                     SliverToBoxAdapter(child: _SectionHeader('Open Alerts', 'See all', onTap: widget.onSeeAllAlerts ?? () {})),
                     SliverToBoxAdapter(child: _AlertsPreview(open, zones)),
+                    SliverToBoxAdapter(child: _SectionHeader('Recent Readings', 'Refresh', onTap: _refresh)),
+                    SliverToBoxAdapter(child: _RecentReadings(zones)),
                     const SliverToBoxAdapter(child: SizedBox(height: 16)),
                   ],
                 ),
@@ -337,6 +342,50 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }).toList(),
       ),
+    );
+  }
+
+  Widget _RecentReadings(List<ZoneModel> zones) {
+    final card = BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border));
+    if (_recent.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: card,
+          child: const Text('No readings yet. Start the meter to see data here.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ),
+      );
+    }
+    final devices = {for (final d in _devices) d.deviceId: d};
+    final zoneNames = {for (final z in zones) z.zoneId: z.zoneName};
+    final rows = <Widget>[];
+    for (var i = 0; i < _recent.length; i++) {
+      final r = _recent[i];
+      final d = devices[r.deviceId];
+      final where = d == null ? 'Unknown device' : '${zoneNames[d.zoneId] ?? 'Zone'} · ${d.deviceName}';
+      if (i > 0) rows.add(const Divider(height: 1, color: AppColors.border));
+      rows.add(Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(children: [
+          const Icon(Icons.bolt, size: 16, color: AppColors.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(where, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              Text(timeAgo(r.timestamp), style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+            ]),
+          ),
+          Text('${r.voltage.toStringAsFixed(1)} V · ${r.current.toStringAsFixed(2)} A · ${(r.power / 1000).toStringAsFixed(2)} kW',
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        ]),
+      ));
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(decoration: card, child: Column(children: rows)),
     );
   }
 

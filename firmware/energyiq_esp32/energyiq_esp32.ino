@@ -100,9 +100,10 @@ void factoryReset() {
 }
 
 // ───────────────────────────── Input checks ─────────────────────────────
+// Any serial the app accepts (spaces too), except characters that would break the JSON we send.
 bool validSerial(const String& s) {
   if (s.length() < 1 || s.length() > 50) return false;
-  for (char c : s) if (!isalnum(c) && c != '-' && c != '_') return false;
+  for (char c : s) if (c < 32 || c == '"' || c == '\\') return false;
   return true;
 }
 
@@ -181,15 +182,22 @@ void handleCommand(String line) {
       Serial.printf("OK - zone %d removed.\n", z + 1);
       return;
     }
-    int sp3 = rest.indexOf(' ');
+    // The API key is the LAST word; everything before it is the serial (so a serial may contain spaces).
+    int sp3 = rest.lastIndexOf(' ');
     String serial = sp3 < 0 ? rest : rest.substring(0, sp3);
     String key = sp3 < 0 ? "" : rest.substring(sp3 + 1);
-    key.trim();
-    if (!validSerial(serial)) { Serial.println("Bad serial. Use letters, numbers, - or _ (example ESP32-001)."); return; }
-    if (!validKey(key)) { Serial.println("Bad API key. Copy it again from the app (36 characters)."); return; }
+    serial.trim(); key.trim();
+    key.toLowerCase();
+    if (!validSerial(serial)) { Serial.println("Bad serial. Copy it again from the app (example ESP32-001)."); return; }
+    if (!validKey(key)) {
+      Serial.printf("Bad API key (got %d characters, need 36). Copy it again from the app.\n", key.length());
+      Serial.println("Format:  zone 1 <serial> <apikey>");
+      return;
+    }
     cfg.serial[z] = serial; cfg.key[z] = key; saveConfig();
     lastSentAt[z] = 0; pendingKwh[z] = 0;
-    Serial.printf("OK - zone %d = %s saved to flash.\n", z + 1, serial.c_str());
+    Serial.printf("OK - zone %d = '%s'  key %s  saved to flash.\n", z + 1, serial.c_str(), key.c_str());
+    if (setupMode) Serial.println("Now type 'restart' to connect.");
   } else if (cmd == "restart") {
     Serial.println("Restarting...");
     delay(500);
@@ -348,7 +356,18 @@ int sendReading(int z, const Reading& r, double kwh) {
            "\"p_power\":%.2f,\"p_energy_kwh\":%.5f,\"p_power_factor\":%.3f}",
            cfg.serial[z].c_str(), cfg.key[z].c_str(), r.voltage, r.current, r.power, kwh, r.pf);
   int code = http.POST(body);
-  if (code != 200) Serial.printf("  zone %d rejected (%d) %s\n", z + 1, code, http.getString().substring(0, 150).c_str());
+  if (code == 403) {
+    Serial.printf("\n  zone %d REJECTED: the cloud does not know serial '%s' with this key.\n", z + 1, cfg.serial[z].c_str());
+    Serial.println("  Check in the app (Settings > Devices & Meters > tap the device):");
+    Serial.println("   - serial is EXACTLY the same (capital letters matter: ESP32-005 is not esp32-005)");
+    Serial.println("   - the API key belongs to THAT device (use the copy icon)");
+    Serial.println("   - device status is Active");
+    Serial.println("  Fix it with:  zone <1-3> <serial> <apikey>");
+  } else if (code < 0) {
+    Serial.printf("  zone %d not sent: no connection to the cloud (%s)\n", z + 1, http.errorToString(code).c_str());
+  } else if (code != 200) {
+    Serial.printf("  zone %d rejected (%d) %s\n", z + 1, code, http.getString().substring(0, 150).c_str());
+  }
   http.end();
   return code;
 }

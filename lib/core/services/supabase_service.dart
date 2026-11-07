@@ -102,6 +102,14 @@ class SupabaseService {
     return rows.map(EnergyReading.fromMap).toList();
   }
 
+  /// Newest readings of all the user's devices (Home "Recent readings" list, M4F2).
+  Future<List<EnergyReading>> getRecentReadings({int limit = 5}) async {
+    final rows = await _db.from('energy_readings').select()
+        .order('timestamp', ascending: false)
+        .limit(limit);
+    return rows.map(EnergyReading.fromMap).toList();
+  }
+
   /// Readings of all the user's devices between two dates (used by reports / analytics).
   Future<List<EnergyReading>> getReadingsBetween(DateTime from, DateTime to, {List<String>? deviceIds}) async {
     var q = _db.from('energy_readings').select()
